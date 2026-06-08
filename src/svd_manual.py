@@ -26,16 +26,20 @@ def jacobi_eigen(A, tol=1e-8, max_iter=1000):
         if max_val < tol:
             break
             
-        # Calcula o ângulo de rotação (theta)
-        if diag[p, p] == diag[q, q]:
-            theta = np.pi / 4.0
-        else:
-            theta = 0.5 * np.arctan(2.0 * diag[p, q] / (diag[p, p] - diag[q, q]))
-            
-        c = np.cos(theta)
-        s = np.sin(theta)
+        # Calcula a variável auxiliar tau (cotangente de 2*theta)
+        tau = (diag[q, q] - diag[p, p]) / (2.0 * diag[p, q])
         
-        # Aplica a rotação de Givens em D e V
+        # Calcula a tangente (t) do ângulo
+        if tau == 0.0:
+            t = 1.0
+        else:
+            t = -np.sign(tau) / (np.abs(tau) + np.sqrt(1.0 + tau**2))
+            
+        # Calcula o cosseno (c) e o seno (s) a partir de t
+        c = 1.0 / np.sqrt(1.0 + t**2)
+        s = t * c
+        
+        # Aplica a rotação de Jacobi em D e V
         D_pp = diag[p, p]
         D_qq = diag[q, q]
         D_pq = diag[p, q]
