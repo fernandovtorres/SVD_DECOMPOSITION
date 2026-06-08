@@ -8,7 +8,7 @@ def grayscale(nome, escala=0.5):
     Lê o vídeo, converte para tons de cinza, redimensiona, 
     salva o vídeo pré-processado e constrói a matriz M.
     """
-    video_src = cv2.VideoCapture('./data/videoplayback')
+    video_src = cv2.VideoCapture('./data/videoplayback.mkv')
     
     # Propriedades do vídeo original
     fps = video_src.get(cv2.CAP_PROP_FPS)
@@ -84,7 +84,7 @@ def rank_k_approximation(M, U, S, V_T, k=1, threshold=30):
 
     return L, S_mask
 
-def plot(M, U, S_diag, V_T, k_max):
+def plot(M, U, S_diag, V_T, k_max, plot_name):
     '''
     Plotagem das métricas:
     1. Decaimento dos valores singulares sigma_i
@@ -136,7 +136,7 @@ def plot(M, U, S_diag, V_T, k_max):
     
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.3)
-    plt.savefig('processed_data/metricas.png', bbox_inches='tight')
+    plt.savefig(f'processed_data/{plot_name}.png', bbox_inches='tight')
     plt.show()
 
 def main():
@@ -144,7 +144,7 @@ def main():
     Separação do background (L) e dos objetos em movimento (S_mask)
     '''
     k_max = 3
-    escala = 0.5
+    escala = 1
     print(f'Escala: {escala}, k_max = {k_max}')
 
     M, shape = grayscale('grayscale_resized', escala)
@@ -170,7 +170,7 @@ def main():
     out_bg.release()
     out_mov.release()
 
-    plot(M, U, S_diag, V_T, k_max)
+    plot(M, U, S_diag, V_T, k_max, f'metricas_numpy{k_max}')
 
 if '__main__' == __name__:
     main()

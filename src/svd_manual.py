@@ -1,7 +1,7 @@
 import numpy as np
 import time
 import cv2
-from svd import grayscale, rank_k_approximation
+from svd import grayscale, rank_k_approximation, plot
 
 def jacobi_eigen(A, tol=1e-8, max_iter=1000):
     """
@@ -101,10 +101,10 @@ def svd_manual(M, tol=1e-8):
 
 def main():
     k_max = 3
-    escala = 0.5
+    escala = 1
     print(f'Escala: {escala}, k_max = {k_max}')    
 
-    M, shape = grayscale('grayscale_manual', escala)
+    M, shape = grayscale('grayscale_resized', escala)
     Ur, Sr, Vr_T = svd_manual(M)
     L, S_mask = rank_k_approximation(M, Ur, Sr, Vr_T, k_max)
 
@@ -126,6 +126,8 @@ def main():
         
     out_bg.release()
     out_mov.release()
+
+    plot(M, Ur, Sr, Vr_T, k_max, f'metricas_manual{k_max}')
 
 if '__main__' == __name__:
     main()
