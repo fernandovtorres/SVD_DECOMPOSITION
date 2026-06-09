@@ -40,12 +40,10 @@ Caso queira utilizar o seu próprio vídeo, basta substituí-lo na pasta `data/`
 
 ### 2. Executando o Código
 
-Os códigos executáveis estão localizados na pasta `src/`. Você pode escolher qual abordagem deseja rodar:
+Os códigos executáveis estão localizados na pasta `src/`. Você pode escolher a redução da escala do vídeo e o posto máximo k_max. A partir disso, duas abordagens serão executadas:
 
-* **`svd_manual.py`**: Implementação algorítmica da SVD construída "do zero", utilizando o **Método de Gauss-Jacobi**.
-* **`svd.py`**: Implementação otimizada que faz uso da função nativa `numpy.linalg.svd` da biblioteca NumPy.
-
-*Nota: Na pasta `src/` também encontra-se o arquivo `grayscale.py`. Trata-se de um módulo auxiliar importado pelos códigos principais para converter os frames do vídeo para escala de cinza, reduzindo a dimensionalidade dos dados e diminuindo o tempo de processamento.*
+* **SVD com NumPy**: Implementação otimizada que faz uso da função nativa `numpy.linalg.svd` da biblioteca NumPy.
+* **SVD manual**: Implementação algorítmica da SVD construída "do zero", utilizando o **Método de Gauss-Jacobi**.
 
 ---
 
@@ -65,3 +63,4 @@ Além dos vídeos, o código gera gráficos para a análise de desempenho e comp
 * **Decaimento dos Valores Singulares**
 * **Variância Acumulada**
 * **Erro de Reconstrução**
+* **Tempo de execução em função do posto e da escala**
