@@ -2,58 +2,29 @@ import cv2
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+import plots
 
-def grayscale(nome, escala=0.5):
-    """
-    Lê o vídeo, converte para tons de cinza, redimensiona, 
-    salva o vídeo pré-processado e constrói a matriz M.
-    """
-    video_src = cv2.VideoCapture('./data/videoplayback.mkv')
-    
-    # Propriedades do vídeo original
-    fps = video_src.get(cv2.CAP_PROP_FPS)
-    if fps == 0 or np.isnan(fps):
-        fps = 30.0 # Define um valor padrão caso o OpenCV não consiga ler o FPS
-        
-    orig_w = int(video_src.get(cv2.CAP_PROP_FRAME_WIDTH))
-    orig_h = int(video_src.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    
-    # Novas dimensões
-    width = int(orig_w * escala)
-    height = int(orig_h * escala)
-    
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    caminho_saida = f'./processed_data/{nome}.mp4'
-    out = cv2.VideoWriter(caminho_saida, fourcc, fps, (width, height), isColor=False)
-    frames = []
-    shape = None
-    
-    while video_src.isOpened():
-        ret, frame = video_src.read()
-        if not ret:
-            break
-            
-        # Converte para tons de cinza
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # Redimensiona para reduzir custo computacional
-        resized = cv2.resize(gray, (width, height), interpolation=cv2.INTER_AREA)
+def rank_k_approximation(M, U, S, V_T, k=1, threshold=30):
+    '''
+    Aproxima a matriz de baixo posto (plano de fundo) e a matriz esparsa (objetos em movimento)
+    '''
+    Uk = U[:, :k]
+    Sk = np.diag(S[:k])
+    Vtk = V_T[:k, :]
 
-        if shape is None:
-            shape = resized.shape
-            
-        # Grava o frame processado no novo vídeo
-        out.write(resized)
-            
-        # Vetoriza o frame (flattening) e adiciona à lista
-        frames.append(resized.flatten())
-        
-    video_src.release()
-    out.release()
-    cv2.destroyAllWindows()
-    
-    # Constrói a matriz M onde cada coluna é um frame vetorizado
-    M = np.column_stack(frames)
-    return M, shape
+    # Plano de fundo isolado dentro do intervalo válido para a escala de cinzas
+    L = np.clip(Uk @ Sk @ Vtk, 0, 255).astype(np.uint8)
+
+    # Matriz de movimento esparsa
+    S_diff = cv2.absdiff(M, L)
+    # Cria a máscara de movimento
+    S_mask = np.where(S_diff > threshold, 255, 0).astype(np.uint8)
+
+    return L, S_mask
+
+'''
+SVD com a biblioteca NumPy
+'''
 
 def numpy_svd(M):
     """
@@ -67,110 +38,106 @@ def numpy_svd(M):
     
     return U, S, V_T
 
-def rank_k_approximation(M, U, S, V_T, k=1, threshold=30):
-    Uk = U[:, :k]
-    Sk = np.diag(S[:k])
-    Vtk = V_T[:k, :]
+'''
+SVD manual com Método de Jacobi
+'''
 
-    # Plano de fundo isolado
-    L = Uk @ Sk @ Vtk
-    # Garante que os valores de L estejam no intervalo válido de pixels [0, 255]
-    L = np.clip(L, 0, 255)
-
-    # Matriz de movimento esparsa
-    S = np.abs(M - L)
-    # Aplica um limiar (threshold) para criar a máscara de movimento
-    S_mask = np.where(S > threshold, 255, 0).astype(np.uint8)
-
-    return L, S_mask
-
-def plot(M, U, S_diag, V_T, k_max, plot_name):
-    '''
-    Plotagem das métricas:
-    1. Decaimento dos valores singulares sigma_i
-    2. Variância acumulada V(k)
-    3. Erro de reconstrução
-    '''
-
-    plt.figure(figsize=(16, 5))
-
-    '''
-    1. Decaimento dos valores singulares sigma_i
-    '''
-    plt.subplot(1, 3, 1)
-    plt.plot(S_diag[:], marker='o', linestyle='-', color='b')
-    plt.yscale('log')
-    plt.title(r'Decaimento dos Valores Singulares $\sigma_i$ (Log)')
-    plt.xlabel('Índice i')
-    plt.ylabel(r'Valor Singular $\sigma_i$ (Log)')
-    plt.grid(True)
+def jacobi_eigen(A, tol=1e-8, max_iter=1000):
+    """
+    Calcula autovalores e autovetores de uma matriz simétrica real A
+    usando o Método de Jacobi clássico.
+    """
+    n = A.shape[0]
+    autovetores = np.eye(n)
+    diag = A.astype(np.float64)
     
-    '''
-    2. Cálculo da variância acumulada V(k)
-    '''
-    variancia_total = np.sum(S_diag**2)
-    variancia_acumulada = [np.sum(S_diag[:i]**2) / variancia_total for i in range(1, k_max + 1)]
-    
-    plt.subplot(1, 3, 2)
-    plt.plot(range(1, k_max + 1), variancia_acumulada, marker='s', color='orange')
-    plt.title('Variância Acumulada $V(k)$')
-    plt.xlabel('Posto k')
-    plt.ylabel('V(k)')
-    plt.grid(True)
-    
-    '''
-    3. Erro de reconstrução (Norma de Frobenius) ||M - L||_F
-    '''
-    erros = []
-    for k in range(1, k_max + 1):
-        L_k = U[:, :k] @ np.diag(S_diag[:k]) @ V_T[:k, :]
-        erro = np.linalg.norm(M - L_k, ord='fro')
-        erros.append(erro)
+    for _ in range(max_iter):
+        # Encontra o elemento de maior módulo fora da diagonal principal
+        max_val = 0.0
+        p, q = -1, -1
+        for i in range(n):
+            for j in range(i + 1, n):
+                if abs(diag[i, j]) > max_val:
+                    max_val = abs(diag[i, j])
+                    p, q = i, j
+                    
+        # Condição de parada: se o maior valor fora da diagonal for menor que a tolerância
+        if max_val < tol:
+            break
+            
+        # Calcula a variável auxiliar tau (cotangente de 2*theta)
+        tau = (diag[q, q] - diag[p, p]) / (2.0 * diag[p, q])
         
-    plt.subplot(1, 3, 3)
-    plt.plot(range(1, k_max + 1), erros, marker='^', color='red')
-    plt.title('Erro de Reconstrução $||M - L||_F$')
-    plt.xlabel('Posto k')
-    plt.ylabel('Erro')
-    plt.grid(True)
+        # Calcula a tangente (t) do ângulo
+        if tau == 0.0:
+            t = 1.0
+        else:
+            t = -np.sign(tau) / (np.abs(tau) + np.sqrt(1.0 + tau**2))
+            
+        # Calcula o cosseno (c) e o seno (s) a partir de t
+        c = 1.0 / np.sqrt(1.0 + t**2)
+        s = t * c
+        
+        # Aplica a rotação de Jacobi em D e V
+        D_pp = diag[p, p]
+        D_qq = diag[q, q]
+        D_pq = diag[p, q]
+        
+        # Atualiza os elementos da diagonal p e q
+        diag[p, p] = c**2 * D_pp + s**2 * D_qq + 2 * c * s * D_pq
+        diag[q, q] = s**2 * D_pp + c**2 * D_qq - 2 * c * s * D_pq
+        diag[p, q] = diag[q, p] = 0.0
+        
+        # Atualiza o resto das linhas e colunas p e q
+        for i in range(n):
+            if i != p and i != q:
+                D_ip = diag[i, p]
+                D_iq = diag[i, q]
+                diag[i, p] = diag[p, i] = c * D_ip + s * D_iq
+                diag[i, q] = diag[q, i] = -s * D_ip + c * D_iq
+                
+        # Atualiza a matriz de autovetores
+        for i in range(n):
+            V_ip = autovetores[i, p]
+            V_iq = autovetores[i, q]
+            autovetores[i, p] = c * V_ip + s * V_iq
+            autovetores[i, q] = -s * V_ip + c * V_iq
+            
+    # Os autovalores estão na matriz diagonal
+    autovalores = np.diag(diag)
+    return autovalores, autovetores
+
+def svd_manual(M, tol=1e-8):
+    """
+    Calcula a Decomposição SVD utilizando o Método de Jacobi em M^T * M.
+    """
+    start_time = time.time()
+    M_float = M.astype(np.float32)
+    MtM = M_float.T @ M_float
     
-    plt.tight_layout()
-    plt.subplots_adjust(wspace=0.3)
-    plt.savefig(f'processed_data/{plot_name}.png', bbox_inches='tight')
-    plt.show()
-
-def main():
-    '''
-    Separação do background (L) e dos objetos em movimento (S_mask)
-    '''
-    k_max = 3
-    escala = 1
-    print(f'Escala: {escala}, k_max = {k_max}')
-
-    M, shape = grayscale('grayscale_resized', escala)
-    U, S_diag, V_T = numpy_svd(M)
-    L, S_mask = rank_k_approximation(M, U, S_diag, V_T, k_max)
-
-    num_frames = M.shape[1]
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')    
-    out_bg = cv2.VideoWriter(f'processed_data/fundo{k_max}.mp4', fourcc, 20.0, (shape[1], shape[0]), isColor=False)
-    out_mov = cv2.VideoWriter(f'processed_data/movimento{k_max}.mp4', fourcc, 20.0, (shape[1], shape[0]), isColor=False)
+    # Calcula autovalores e autovetores usando Jacobi
+    autovalores, autovetores = jacobi_eigen(MtM, tol=tol)
     
-    for i in range(num_frames):
-        # Pega a coluna i do Fundo (L) e remodela para a imagem 2D
-        frame_fundo = L[:, i].reshape(shape).astype(np.uint8)
+    # Ordena os resultados em ordem decrescente
+    idx_ordenado = np.argsort(autovalores)[::-1]
+    autovalores = autovalores[idx_ordenado]
+    autovetores = autovetores[:, idx_ordenado]
+    
+    # Calcula os valores singulares
+    autovalores = np.maximum(autovalores, 0) # Evita raízes negativas por precisão de float
+    S = np.sqrt(autovalores)
+    
+    # Filtra valores singulares não-nulos
+    idx_nao_nulos = S > tol
+    Sr = S[idx_nao_nulos]
+    Vr = autovetores[:, idx_nao_nulos]
+    
+    # Calcula a matriz U (u_i = M * v_i / sigma_i)
+    Ur = np.zeros((M.shape[0], len(Sr)))
+    for i in range(len(Sr)):
+        Ur[:, i] = (M @ Vr[:, i]) / Sr[i]
         
-        # Pega a coluna i da Máscara de Movimento (S_mask) e remodela
-        frame_mask = S_mask[:, i].reshape(shape).astype(np.uint8)
-        
-        # Grava os frames em seus respectivos arquivos
-        out_bg.write(frame_fundo)
-        out_mov.write(frame_mask)
-        
-    out_bg.release()
-    out_mov.release()
+    tempo_execucao = time.time() - start_time
+    print(f"Tempo de execução SVD com Método de Jacobi: {tempo_execucao:.4f} segundos")
 
-    plot(M, U, S_diag, V_T, k_max, f'metricas_numpy{k_max}')
-
-if '__main__' == __name__:
-    main()
+    return Ur, Sr, Vr.T
