@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import svd
-import video_processing as vp
+from grayscale import grayscale
 import plots
 
 def run_numpy(k_max, escala=1):
@@ -9,7 +9,7 @@ def run_numpy(k_max, escala=1):
     SVD com NumPy
     '''
     # Criação da matriz M
-    M, shape = vp.grayscale('grayscale_resized', escala)
+    M, shape = grayscale('grayscale_resized', escala)
 
     U, S_diag, V_T = svd.numpy_svd(M)
     L, S_mask = svd.rank_k_approximation(M, U, S_diag, V_T, k_max)
@@ -43,7 +43,7 @@ def run_manual(k_max, escala=1):
     SVD com Método de Jacobi implementado manualmente
     '''
     # Criação da matriz M
-    M, shape = vp.grayscale('grayscale_resized', escala)
+    M, shape = grayscale('grayscale_resized', escala)
 
     U, S_diag, V_T = svd.svd_manual(M)
     L, S_mask = svd.rank_k_approximation(M, U, S_diag, V_T, k_max)

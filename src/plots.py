@@ -33,14 +33,13 @@ def plot_erro(M, U, S_diag, V_T, k_max, nome):
     Plotagem do erro de reconstrução (Norma de Frobenius) ||M - L||_F
     '''
     erros = []
-    M_f32 = M.astype(np.float32)
+    M = M.astype(np.float32)
     for k in range(1, k_max + 1):
         L_k = U[:, :k] @ np.diag(S_diag[:k]) @ V_T[:k, :]
         erro = np.linalg.norm(M - L_k, ord='fro')
         erros.append(erro)
         del L_k
         
-    plt.subplot(1, 3, 3)
     plt.plot(range(1, k_max + 1), erros, marker='^', color='red')
     plt.title('Erro de Reconstrução $||M - L||_F$')
     plt.xlabel('Posto k')
@@ -48,3 +47,4 @@ def plot_erro(M, U, S_diag, V_T, k_max, nome):
     plt.grid(True)
     plt.savefig(f'processed_data/{nome}.png', bbox_inches='tight')
     plt.show()
+
